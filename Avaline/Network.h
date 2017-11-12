@@ -20,6 +20,11 @@
 
 #include <curl/curl.h>
 
+typedef enum HTTPType {
+	HTTPGET,
+	HTTPPOST
+} HTTPType;
+
 typedef enum HTTPStatus {
 	HTTPOK,
 	HTTPPENDING,
@@ -46,6 +51,6 @@ HTTPResponse http_post(char *url, char *form, struct curl_slist *cookies);
 void http_delete(HTTPResponse *response, CookieOptions options);
 
 // Private methods the user doesn't need to know about
-// char *http_join(char *url, char *query);
-// static struct curl_slist *get_cookies(CURL *curl_handle);
-// static size_t http_write(void *contents, size_t old_size, size_t new_size, void *response);
+char *http_join(char *url, size_t url_size, char *query, size_t query_size);
+static struct curl_slist *get_cookies(CURL *curl_handle);
+static size_t http_write(void *contents, size_t old_size, size_t new_size, void *response);

@@ -23,104 +23,6 @@
 
 #include "Network.h"
 
-typedef enum HTTPType {
-	HTTPGET,
-	HTTPPOST
-} HTTPType;
-
-/**
- * http_write
- *     this function controlls the writting of the network response to the buffer
- *     of the HTTPRequest structure.
- *
- *     you may notice that the resonse is passed as a void and that is because it
- *     is passed directly to this function from libcurl and given that it doesnt know
- *     the type of the structure it only makes sense to pass it without any more
- *     information than that it is indeed a memory address.
-
- * @visibility private
- *
- * @param (void *) contents - the contents of the request as received by libcurl
- * @param (size_t) size     - the size of each data type in bytes
- * @param (size_t) nmemb    - the number of elements being passed
- * @param (void *) response - the HTTPResponse structure to write to
- *
- * @return (static size_t) the new buffer size used for some record keeping
- */
-static size_t http_write(void *contents, size_t size, size_t nmemb, void *response) {
-	HTTPResponse *mem = (HTTPResponse *)response;
-	size_t buff_size = size * nmemb;
-
-	// allocate the size needed to store all the data
-	mem->buff = (char *)realloc(mem->buff, mem->buff_size + buff_size + 1);
-
-	if (mem->buff == NULL) {
-		mem->status = HTTPWRITEMEMERROR;
-		return 0;
-	}
-
-	// copy everything into the response struct
-	memcpy(&(mem->buff[mem->buff_size]), contents, buff_size);
-
-	mem->buff_size += buff_size;
-	mem->buff[mem->buff_size] = 0;
-
-	return buff_size;
-}
-
-/**
- * get_cookies
- *     this function grabs the cookies set by the server and saves them for future requests
- *
- * @visibility private
- *
- * @param (CURL *) handle - the libcurl request handle to grab the cookies from
- *
- * @return (static struct curl_slist *) a new libcurl list of cookies
- */
-static struct curl_slist *get_cookies(CURL *curl_handle) {
-	struct curl_slist *cookies;
-	CURLcode res;
-
-	res = curl_easy_getinfo(curl_handle, CURLINFO_COOKIELIST, &cookies);
-
-	if (res != CURLE_OK) {
-		return NULL;
-	} else {
-		return cookies;
-	}
-}
-
-/**
-* http_join
-*     this function is a helper function for GET requests that allows you to build
-*     forms like you would for POST requests and then merge it into the url as the
-*     query string.
-*
-* @todo:
-*     - handle cases where malloc may fail to allocate memory
-*
-* @visibility public
-*
-* @param (char *) url   - the url to merge onto
-* @param (char *) query - the url encoded form to merge into the url
-*
-* @param (char *) the merged url
-*/
-char *http_join(char *url, size_t url_size, char *query, size_t query_size) {
-	//size_t url_size = strlen(url);
-	//size_t query_size = strlen(query);
-	size_t buff_size = 2 + url_size + query_size;
-
-	char *buff = (char *)malloc(buff_size);
-
-	strncpy_s(buff, buff_size, url, url_size);
-	strncat_s(buff, buff_size, "?", 1);
-	strncat_s(buff, buff_size, query, query_size);
-
-	return buff;
-}
-
 HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_slist *cookies) {
 	HTTPResponse response;
 
@@ -249,4 +151,97 @@ void http_delete(HTTPResponse *response, CookieOptions options) {
 	if (response->cookies && options == DELETECOOKIES) {
 		curl_slist_free_all(response->cookies);
 	}
+}
+
+/**
+* http_write
+*     this function controlls the writting of the network response to the buffer
+*     of the HTTPRequest structure.
+*
+*     you may notice that the resonse is passed as a void and that is because it
+*     is passed directly to this function from libcurl and given that it doesnt know
+*     the type of the structure it only makes sense to pass it without any more
+*     information than that it is indeed a memory address.
+
+* @visibility private
+*
+* @param (void *) contents - the contents of the request as received by libcurl
+* @param (size_t) size     - the size of each data type in bytes
+* @param (size_t) nmemb    - the number of elements being passed
+* @param (void *) response - the HTTPResponse structure to write to
+*
+* @return (static size_t) the new buffer size used for some record keeping
+*/
+static size_t http_write(void *contents, size_t size, size_t nmemb, void *response) {
+	HTTPResponse *mem = (HTTPResponse *)response;
+	size_t buff_size = size * nmemb;
+
+	// allocate the size needed to store all the data
+	mem->buff = (char *)realloc(mem->buff, mem->buff_size + buff_size + 1);
+
+	if (mem->buff == NULL) {
+		mem->status = HTTPWRITEMEMERROR;
+		return 0;
+	}
+
+	// copy everything into the response struct
+	memcpy(&(mem->buff[mem->buff_size]), contents, buff_size);
+
+	mem->buff_size += buff_size;
+	mem->buff[mem->buff_size] = 0;
+
+	return buff_size;
+}
+
+/**
+* get_cookies
+*     this function grabs the cookies set by the server and saves them for future requests
+*
+* @visibility private
+*
+* @param (CURL *) handle - the libcurl request handle to grab the cookies from
+*
+* @return (static struct curl_slist *) a new libcurl list of cookies
+*/
+static struct curl_slist *get_cookies(CURL *curl_handle) {
+	struct curl_slist *cookies;
+	CURLcode res;
+
+	res = curl_easy_getinfo(curl_handle, CURLINFO_COOKIELIST, &cookies);
+
+	if (res != CURLE_OK) {
+		return NULL;
+	} else {
+		return cookies;
+	}
+}
+
+/**
+* http_join
+*     this function is a helper function for GET requests that allows you to build
+*     forms like you would for POST requests and then merge it into the url as the
+*     query string.
+*
+* @todo:
+*     - handle cases where malloc may fail to allocate memory
+*
+* @visibility public
+*
+* @param (char *) url   - the url to merge onto
+* @param (char *) query - the url encoded form to merge into the url
+*
+* @param (char *) the merged url
+*/
+char *http_join(char *url, size_t url_size, char *query, size_t query_size) {
+	//size_t url_size = strlen(url);
+	//size_t query_size = strlen(query);
+	size_t buff_size = 2 + url_size + query_size;
+
+	char *buff = (char *)malloc(buff_size);
+
+	strncpy_s(buff, buff_size, url, url_size);
+	strncat_s(buff, buff_size, "?", 1);
+	strncat_s(buff, buff_size, query, query_size);
+
+	return buff;
 }
