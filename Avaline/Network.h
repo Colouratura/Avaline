@@ -28,6 +28,11 @@ typedef enum HTTPStatus {
 	HTTPCOOKIEERR
 } HTTPStatus;
 
+typedef enum CookieOptions {
+	KEEPCOOKIES,
+	DELETECOOKIES
+} CookieOptions;
+
 typedef struct HTTPResponse {
 	HTTPStatus         status;
 	size_t             buff_size;
@@ -35,17 +40,12 @@ typedef struct HTTPResponse {
 	struct curl_slist *cookies;
 } HTTPResponse;
 
-typedef enum CookieOptions {
-	KEEPCOOKIES,
-	DELETECOOKIES
-} CookieOptions;
+HTTPResponse http_get(char *url, char *query, struct curl_slist *cookies);
+HTTPResponse http_post(char *url, char *form, struct curl_slist *cookies);
 
-HTTPResponse http_get(char *url, struct curl_slist *cookies);
-// HTTPResponse http_post(char *url, char *form, struct curl_slist *cookies);
-
-char *http_join(char *url, char *query);
 void http_delete(HTTPResponse *response, CookieOptions options);
 
 // Private methods the user doesn't need to know about
+// char *http_join(char *url, char *query);
 // static struct curl_slist *get_cookies(CURL *curl_handle);
 // static size_t http_write(void *contents, size_t old_size, size_t new_size, void *response);

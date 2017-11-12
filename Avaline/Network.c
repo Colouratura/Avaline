@@ -23,6 +23,11 @@
 
 #include "Network.h"
 
+typedef enum HTTPType {
+	HTTPGET,
+	HTTPPOST
+} HTTPType;
+
 /**
  * http_write
  *     this function controlls the writting of the network response to the buffer
@@ -87,21 +92,49 @@ static struct curl_slist *get_cookies(CURL *curl_handle) {
 }
 
 /**
- * http_get
- *     this function performs a GET request.
- *
- * @visibility public
- *
- * @param (char *)              url     - the url with the query string apppended to fetch
- * @param (struct curl_slist *) cookies - the cookies list to include with the request (nullable)
- *
- * @return (HTTPRequest) the response struct with response data and optional error codes
- */
-HTTPResponse http_get(char *url, struct curl_slist *cookies) {
+* http_join
+*     this function is a helper function for GET requests that allows you to build
+*     forms like you would for POST requests and then merge it into the url as the
+*     query string.
+*
+* @todo:
+*     - handle cases where malloc may fail to allocate memory
+*
+* @visibility public
+*
+* @param (char *) url   - the url to merge onto
+* @param (char *) query - the url encoded form to merge into the url
+*
+* @param (char *) the merged url
+*/
+char *http_join(char *url, size_t url_size, char *query, size_t query_size) {
+	//size_t url_size = strlen(url);
+	//size_t query_size = strlen(query);
+	size_t buff_size = 2 + url_size + query_size;
+
+	char *buff = (char *)malloc(buff_size);
+
+	strncpy_s(buff, buff_size, url, url_size);
+	strncat_s(buff, buff_size, "?", 1);
+	strncat_s(buff, buff_size, query, query_size);
+
+	return buff;
+}
+
+HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_slist *cookies) {
 	HTTPResponse response;
-	
+
 	CURL *handle;
 	CURLcode res;
+
+	char *url_query;
+
+	// add the query string if this is a GET
+	if (method == HTTPGET) {
+		url_query = http_join(url, strlen(url), data, strlen(data));
+	} else {
+		url_query = url;
+	}
 
 	// setup the response object
 	response.buff = (char *)malloc(1);
@@ -114,11 +147,24 @@ HTTPResponse http_get(char *url, struct curl_slist *cookies) {
 
 	handle = curl_easy_init();
 
-	curl_easy_setopt(handle, CURLOPT_URL, url);
+	if (!handle) {
+		http_delete(&response, KEEPCOOKIES);
+		response.status = HTTPFATALERROR;
+
+		return response;
+	}
+
+	curl_easy_setopt(handle, CURLOPT_URL, url_query);
 	curl_easy_setopt(handle, CURLOPT_COOKIEFILE, "");
 	curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, http_write);
 	curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void *)&response); // that last bit is taking the address of our HTTPRequest and casting it as a void pointer
 	curl_easy_setopt(handle, CURLOPT_USERAGENT, "Avaline/0.0.1");
+
+	// if our request is a POST then append the data to the form
+	if (method == HTTPPOST) {
+		curl_easy_setopt(handle, CURLOPT_POSTFIELDS, data);
+		curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)strlen(data));
+	}
 
 	// set our cookies
 	while (cookies) {
@@ -130,11 +176,8 @@ HTTPResponse http_get(char *url, struct curl_slist *cookies) {
 	res = curl_easy_perform(handle);
 
 	if (res != CURLE_OK) {
-		printf("%d\n", res);
 		curl_easy_cleanup(handle);
-		free(response.buff);
-
-		response.buff = NULL;
+		http_delete(&response, KEEPCOOKIES);
 		response.status = HTTPFATALERROR;
 
 		return response;
@@ -144,37 +187,42 @@ HTTPResponse http_get(char *url, struct curl_slist *cookies) {
 
 	// cleanup request
 	curl_easy_cleanup(handle);
-    
+
 	response.status = HTTPOK;
 
 	return response;
 }
 
 /**
- * http_join
- *     this function is a helper function for GET requests that allows you to build
- *     forms like you would for POST requests and then merge it into the url as the
- *     query string.
- *
- * @todo:
- *     - handle cases where malloc may fail to allocate memory
+ * http_get
+ *     this function performs a GET request.
  *
  * @visibility public
  *
- * @param (char *) url   - the url to merge onto
- * @param (char *) query - the url encoded form to merge into the url
+ * @param (char *)              url     - the url to fetch
+ * @param (char *)              query   - the query string to append
+ * @param (struct curl_slist *) cookies - the cookies list to include with the request (nullable)
  *
- * @param (char *) the merged url
+ * @return (HTTPRequest) the response struct with response data and optional error codes
  */
-char *http_join(char *url, char *query) {
-	size_t buff_size = 2 + strlen(url) + strlen(query);
-	char *buff = (char *)malloc(buff_size);
-	
-	strncpy_s(buff, buff_size, url, strlen(url));
-	strncat_s(buff, buff_size, "?", 1);
-	strncat_s(buff, buff_size, query, strlen(query));
+HTTPResponse http_get(char *url, char *query, struct curl_slist *cookies) {
+	return http_request(HTTPGET, url, query, cookies);
+}
 
-	return buff;
+/**
+* http_get
+*     this function performs a POST request.
+*
+* @visibility public
+*
+* @param (char *)              url     - the url to fetch
+* @param (char *)              query   - the query string to append as a form
+* @param (struct curl_slist *) cookies - the cookies list to include with the request (nullable)
+*
+* @return (HTTPRequest) the response struct with response data and optional error codes
+*/
+HTTPResponse http_post(char *url, char *query, struct curl_slist *cookies) {
+	return http_request(HTTPPOST, url, query, cookies);
 }
 
 /**
@@ -193,6 +241,8 @@ char *http_join(char *url, char *query) {
  * @return (void)
  */
 void http_delete(HTTPResponse *response, CookieOptions options) {
+	response->buff_size = 0;
+
 	if (response->buff) {
 		free(response->buff);
 	}

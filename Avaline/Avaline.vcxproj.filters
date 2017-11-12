@@ -35,5 +35,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\README.md" />
+    <None Include="..\CODE_OF_CONDUCT.md" />
   </ItemGroup>
 </Project>
