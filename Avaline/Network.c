@@ -32,7 +32,7 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
 	char *url_query;
 
 	// add the query string if this is a GET
-	if (method == HTTPGET) {
+	if (method == HTTP_GET) {
 		url_query = http_join(url, strlen(url), data, strlen(data));
 	} else {
 		url_query = url;
@@ -41,8 +41,8 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
 	// setup the response object
 	response.buff = (char *)malloc(1);
 	response.buff_size = 0;
-	response.status = HTTPPENDING;
-	response.cookies = NULL;
+	response.status = HTTP_PENDING;
+	// response.cookies = NULL;
 
 	// setup the request
 	curl_global_init(CURL_GLOBAL_ALL);
@@ -50,8 +50,8 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
 	handle = curl_easy_init();
 
 	if (!handle) {
-		http_delete(&response, KEEPCOOKIES);
-		response.status = HTTPFATALERROR;
+		http_delete(&response, KEEP_COOKIES);
+		response.status = HTTP_FATALERROR;
 
 		return response;
 	}
@@ -63,7 +63,7 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
 	curl_easy_setopt(handle, CURLOPT_USERAGENT, "Avaline/0.0.1");
 
 	// if our request is a POST then append the data to the form
-	if (method == HTTPPOST) {
+	if (method == HTTP_POST) {
 		curl_easy_setopt(handle, CURLOPT_POSTFIELDS, data);
 		curl_easy_setopt(handle, CURLOPT_POSTFIELDSIZE, (long)strlen(data));
 	}
@@ -79,18 +79,29 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
 
 	if (res != CURLE_OK) {
 		curl_easy_cleanup(handle);
-		http_delete(&response, KEEPCOOKIES);
-		response.status = HTTPFATALERROR;
+		http_delete(&response, KEEP_COOKIES);
+		response.status = HTTP_FATALERROR;
 
 		return response;
 	} else {
 		response.cookies = get_cookies(handle);
+
+		// checking for a cookie write error
+		if (!response.cookies) {
+			http_delete(&response, KEEP_COOKIES);
+			response.status = HTTP_COOKIEERROR;
+
+			// clean up the curl stuff too
+			curl_easy_cleanup(handle);
+
+			return response;
+		}
 	}
 
 	// cleanup request
 	curl_easy_cleanup(handle);
 
-	response.status = HTTPOK;
+	response.status = HTTP_OK;
 
 	return response;
 }
@@ -108,7 +119,7 @@ HTTPResponse http_request(HTTPType method, char *url, char *data, struct curl_sl
  * @return (HTTPRequest) the response struct with response data and optional error codes
  */
 HTTPResponse http_get(char *url, char *query, struct curl_slist *cookies) {
-	return http_request(HTTPGET, url, query, cookies);
+	return http_request(HTTP_GET, url, query, cookies);
 }
 
 /**
@@ -124,7 +135,7 @@ HTTPResponse http_get(char *url, char *query, struct curl_slist *cookies) {
 * @return (HTTPRequest) the response struct with response data and optional error codes
 */
 HTTPResponse http_post(char *url, char *query, struct curl_slist *cookies) {
-	return http_request(HTTPPOST, url, query, cookies);
+	return http_request(HTTP_POST, url, query, cookies);
 }
 
 /**
@@ -142,13 +153,14 @@ HTTPResponse http_post(char *url, char *query, struct curl_slist *cookies) {
  *
  * @return (void)
  */
-void http_delete(HTTPResponse *response, CookieOptions options) {
+void http_delete(HTTPResponse *response, CookieOptions *option) {
 	response->buff_size = 0;
 
 	if (response->buff) {
 		free(response->buff);
 	}
-	if (response->cookies && options == DELETECOOKIES) {
+
+	if (response->cookies && option == DELETE_COOKIES) {
 		curl_slist_free_all(response->cookies);
 	}
 }
@@ -180,7 +192,7 @@ static size_t http_write(void *contents, size_t size, size_t nmemb, void *respon
 	mem->buff = (char *)realloc(mem->buff, mem->buff_size + buff_size + 1);
 
 	if (mem->buff == NULL) {
-		mem->status = HTTPWRITEMEMERROR;
+		mem->status = HTTP_WRITEMEMERROR;
 		return 0;
 	}
 

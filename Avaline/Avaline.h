@@ -19,4 +19,4 @@
 */
 
 #include <stdio.h>
-#include "Network.h"
+#include "MediaWiki.h"

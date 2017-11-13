@@ -144,10 +144,12 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Avaline.c" />
+    <ClCompile Include="MediaWiki.c" />
     <ClCompile Include="Network.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Avaline.h" />
+    <ClInclude Include="MediaWiki.h" />
     <ClInclude Include="Network.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
     </ClInclude>
